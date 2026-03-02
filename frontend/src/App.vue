@@ -82,6 +82,14 @@
             <el-icon><Calendar /></el-icon>
             <span>内容日历</span>
           </el-menu-item>
+          <el-menu-item index="/design-tasks">
+            <el-icon><EditPen /></el-icon>
+            <span>设计任务</span>
+          </el-menu-item>
+          <el-menu-item index="/asset-library">
+            <el-icon><PictureRounded /></el-icon>
+            <span>素材库</span>
+          </el-menu-item>
           <el-menu-item index="/publish">
             <el-icon><Promotion /></el-icon>
             <span>发布渠道</span>
@@ -255,8 +263,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Document, Promotion, Setting, Tools,
-  OfficeBuilding, UserFilled, User, Stamp, DataLine, Avatar,
+  Document, EditPen, Promotion, Setting, Tools,
+  OfficeBuilding, PictureRounded, UserFilled, User, Stamp, DataLine, Avatar,
   Calendar, List, Checked, TrendCharts, House,
   Flag, Connection, MagicStick, Share, Bell, Loading,
 } from '@element-plus/icons-vue'

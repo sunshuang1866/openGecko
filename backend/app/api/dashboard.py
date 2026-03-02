@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session, subqueryload
 from app.core.dependencies import get_current_active_superuser, get_current_user, get_db
 from app.models.campaign import Campaign, CampaignContact, CampaignTask
 from app.models.content import Content, content_assignees
+from app.models.design import DesignTask
 from app.models.event import ChecklistItem, Event, EventTask
 from app.models.meeting import Meeting, meeting_assignees
 from app.models.user import User
 from app.schemas.dashboard import (
     AssignedCampaignTask,
     AssignedChecklistItem,
+    AssignedDesignTask,
     AssignedEventTask,
     AssignedItem,
     ContentByTypeStats,
@@ -168,6 +170,28 @@ async def get_user_dashboard(
         for t in my_campaign_tasks
     ]
 
+    # 获取分配给我的设计任务（跨所有社区）
+    my_design_tasks = (
+        db.query(DesignTask)
+        .filter(DesignTask.assignee_id == current_user.id)
+        .order_by(DesignTask.due_date.asc().nullslast())
+        .limit(100)
+        .all()
+    )
+
+    design_task_items = [
+        AssignedDesignTask(
+            id=t.id,
+            title=t.title,
+            task_type=t.task_type,
+            status=t.status,
+            priority=t.priority,
+            due_date=t.due_date,
+            content_title=t.content.title if t.content else None,
+        )
+        for t in my_design_tasks
+    ]
+
     # 格式化响应数据
     content_items = [
         AssignedItem(
@@ -207,6 +231,7 @@ async def get_user_dashboard(
         event_tasks=event_task_items,
         checklist_items=checklist_items_out,
         campaign_tasks=campaign_task_items,
+        design_tasks=design_task_items,
         content_stats=content_stats,
         meeting_stats=meeting_stats,
         event_task_stats=_calculate_work_status_stats(my_event_tasks),
@@ -217,7 +242,8 @@ async def get_user_dashboard(
             .filter(CampaignContact.assigned_to_id == current_user.id)
             .all()
         ),
-        total_assigned_items=len(assigned_contents) + len(assigned_meetings) + len(my_event_tasks) + len(my_checklist_items) + len(my_campaign_tasks),
+        design_task_stats=_calculate_work_status_stats(my_design_tasks),
+        total_assigned_items=len(assigned_contents) + len(assigned_meetings) + len(my_event_tasks) + len(my_checklist_items) + len(my_campaign_tasks) + len(my_design_tasks),
     )
 
 
@@ -474,6 +500,17 @@ async def get_workload_overview(
         if c.assigned_to_id in user_id_set:
             user_care_contacts[c.assigned_to_id].append(c)
 
+    # 一次性加载所有设计任务（按 assignee_id 分组）
+    all_design_tasks_wl = (
+        db.query(DesignTask)
+        .filter(DesignTask.assignee_id.in_(user_ids))
+        .all()
+    )
+    user_design_tasks: dict[int, list] = defaultdict(list)
+    for t in all_design_tasks_wl:
+        if t.assignee_id is not None:
+            user_design_tasks[t.assignee_id].append(t)
+
     result = []
     for user in users:
         assigned_contents = user_contents.get(user.id, [])
@@ -482,6 +519,7 @@ async def get_workload_overview(
         assigned_checklist = user_checklist_items.get(user.id, [])
         assigned_campaign_tasks = user_campaign_tasks.get(user.id, [])
         assigned_care_contacts = user_care_contacts.get(user.id, [])
+        assigned_design_tasks = user_design_tasks.get(user.id, [])
 
         content_stats = _calculate_work_status_stats(assigned_contents)
         meeting_stats = _calculate_work_status_stats(assigned_meetings)
@@ -489,6 +527,7 @@ async def get_workload_overview(
         checklist_item_stats = _calculate_work_status_stats(assigned_checklist)
         campaign_task_stats = _calculate_work_status_stats(assigned_campaign_tasks)
         care_contact_stats = _calculate_care_contact_stats(assigned_care_contacts)
+        design_task_stats = _calculate_work_status_stats(assigned_design_tasks)
 
         type_stats = {"contribution": 0, "release_note": 0, "event_summary": 0}
         for content in assigned_contents:
@@ -499,6 +538,7 @@ async def get_workload_overview(
         event_tasks_count = len(assigned_event_tasks)
         checklist_count = len(assigned_checklist)
         campaign_task_count = len(assigned_campaign_tasks)
+        design_task_count = len(assigned_design_tasks)
 
         result.append(UserWorkloadItem(
             user_id=user.id,
@@ -510,8 +550,9 @@ async def get_workload_overview(
             checklist_item_stats=checklist_item_stats,
             campaign_task_stats=campaign_task_stats,
             care_contact_stats=care_contact_stats,
+            design_task_stats=design_task_stats,
             content_by_type=ContentByTypeStats(**type_stats),
-            total=len(assigned_contents) + len(assigned_meetings) + event_tasks_count + checklist_count + campaign_task_count + len(assigned_care_contacts),
+            total=len(assigned_contents) + len(assigned_meetings) + event_tasks_count + checklist_count + campaign_task_count + len(assigned_care_contacts) + design_task_count,
         ))
 
     return WorkloadOverviewResponse(users=result)
@@ -553,6 +594,15 @@ def _calculate_work_status_stats(items) -> WorkStatusStats:
             }
             work_status = _ct_map.get(item.status, "planning")
             deadline = item.deadline  # date | None
+        elif isinstance(item, DesignTask):
+            _dt_map = {
+                "not_started": "planning",
+                "in_progress": "in_progress",
+                "review": "in_progress",
+                "completed": "completed",
+            }
+            work_status = _dt_map.get(item.status, "planning")
+            deadline = item.due_date  # date | None
         elif isinstance(item, Meeting):
             work_status = _map_meeting_status_to_work_status(item.status)
             deadline = getattr(item, "scheduled_at", None)

@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api import (
     admin,
     analytics,
+    assets,
     auth,
     campaigns,
     channels,
@@ -22,6 +23,7 @@ from app.api import (
     community_dashboard,
     contents,
     dashboard,
+    design_tasks,
     ecosystem,
     event_templates,
     events,
@@ -206,6 +208,8 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(event_templates.router, prefix="/api/event-templates", tags=["Event Templates"])
 app.include_router(campaigns.router, prefix="/api/campaigns", tags=["Campaigns"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(design_tasks.router, prefix="/api/design-tasks", tags=["Design Tasks"])
+app.include_router(assets.router, prefix="/api/assets", tags=["Assets"])
 
 
 @app.get("/api/health")

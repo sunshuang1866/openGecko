@@ -60,6 +60,18 @@ class AssignedCampaignTask(BaseModel):
     campaign_name: str | None = None
 
 
+class AssignedDesignTask(BaseModel):
+    """分配给用户的设计任务"""
+    id: int
+    type: Literal["design_task"] = "design_task"
+    title: str
+    task_type: str        # poster / icon / illustration / logo / template / brand_guide / other
+    status: str           # not_started / in_progress / review / completed
+    priority: str         # low / medium / high
+    due_date: date | None = None
+    content_title: str | None = None
+
+
 class WorkStatusStats(BaseModel):
     """工作状态统计"""
     planning: int = 0
@@ -75,12 +87,14 @@ class DashboardResponse(BaseModel):
     event_tasks: list[AssignedEventTask] = []
     checklist_items: list[AssignedChecklistItem] = []
     campaign_tasks: list[AssignedCampaignTask] = []
+    design_tasks: list[AssignedDesignTask] = []
     content_stats: WorkStatusStats
     meeting_stats: WorkStatusStats
     event_task_stats: WorkStatusStats = WorkStatusStats()
     checklist_item_stats: WorkStatusStats = WorkStatusStats()
     campaign_task_stats: WorkStatusStats = WorkStatusStats()
     care_contact_stats: WorkStatusStats = WorkStatusStats()
+    design_task_stats: WorkStatusStats = WorkStatusStats()
     total_assigned_items: int
 
 
@@ -121,6 +135,7 @@ class UserWorkloadItem(BaseModel):
     checklist_item_stats: WorkStatusStats = WorkStatusStats()
     campaign_task_stats: WorkStatusStats = WorkStatusStats()
     care_contact_stats: WorkStatusStats = WorkStatusStats()
+    design_task_stats: WorkStatusStats = WorkStatusStats()
     content_by_type: ContentByTypeStats
     total: int
 

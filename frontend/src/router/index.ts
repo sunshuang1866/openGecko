@@ -251,6 +251,19 @@ const router = createRouter({
       meta: { requiresAuth: true },
       beforeEnter: insightsGuard,
     },
+    // 设计管理
+    {
+      path: '/design-tasks',
+      name: 'DesignTasks',
+      component: () => import('../views/DesignTasks.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/asset-library',
+      name: 'AssetLibrary',
+      component: () => import('../views/AssetLibrary.vue'),
+      meta: { requiresAuth: true },
+    },
     // Phase 5 数据分析 & 审计日志
     {
       path: '/analytics',

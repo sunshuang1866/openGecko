@@ -94,3 +94,4 @@ class Content(Base):
         secondaryjoin="User.id == content_assignees.c.user_id",
         back_populates="assigned_contents",
     )
+    assets = relationship("Asset", secondary="content_assets", back_populates="contents")

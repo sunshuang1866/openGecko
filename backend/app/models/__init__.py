@@ -4,6 +4,7 @@ from app.models.channel import ChannelConfig
 from app.models.committee import Committee, CommitteeMember
 from app.models.community import Community
 from app.models.content import Content
+from app.models.design import Asset, DesignTask, content_assets
 from app.models.ecosystem import EcosystemContributor, EcosystemProject, EcosystemSnapshot
 from app.models.event import (
     ChecklistItem,
@@ -59,4 +60,7 @@ __all__ = [
     "EcosystemSnapshot",
     "Notification",
     "NotificationType",
+    "DesignTask",
+    "Asset",
+    "content_assets",
 ]

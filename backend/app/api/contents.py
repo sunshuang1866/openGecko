@@ -5,10 +5,11 @@ from sqlalchemy import insert, or_
 from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.dependencies import check_content_edit_permission, get_current_user
+from app.core.dependencies import check_content_edit_permission, get_current_community, get_current_user
 from app.database import get_db
 from app.models import Content, User
 from app.models.content import content_communities
+from app.models.design import Asset
 from app.schemas.content import (
     ContentCalendarOut,
     ContentCreate,
@@ -19,6 +20,7 @@ from app.schemas.content import (
     ContentUpdate,
     PaginatedContents,
 )
+from app.schemas.design import AssetOut
 from app.services.converter import convert_markdown_to_html
 
 router = APIRouter()
@@ -487,3 +489,87 @@ def update_content_schedule(
         "community_ids": _get_content_community_ids(db, content_id),
     }
     return content_dict
+
+
+# ─── Content ↔ Asset endpoints ────────────────────────────────────────────────
+
+
+def _build_asset_out_simple(asset: Asset) -> AssetOut:
+    uploader_name = None
+    if asset.uploader:
+        uploader_name = asset.uploader.full_name or asset.uploader.username
+    return AssetOut(
+        id=asset.id,
+        name=asset.name,
+        description=asset.description,
+        asset_type=asset.asset_type,
+        file_url=asset.file_url,
+        file_size=asset.file_size,
+        mime_type=asset.mime_type,
+        tags=asset.tags or [],
+        community_id=asset.community_id,
+        uploaded_by_user_id=asset.uploaded_by_user_id,
+        uploader_name=uploader_name,
+        created_at=asset.created_at,
+        updated_at=asset.updated_at,
+    )
+
+
+@router.get("/{content_id}/assets", response_model=list[AssetOut])
+async def list_content_assets(
+    content_id: int,
+    community_id: int = Depends(get_current_community),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[AssetOut]:
+    """获取内容关联的素材列表。"""
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if not content:
+        raise HTTPException(404, "Content not found")
+    return [_build_asset_out_simple(a) for a in content.assets]
+
+
+@router.post("/{content_id}/assets/{asset_id}", response_model=AssetOut, status_code=201)
+async def link_asset_to_content(
+    content_id: int,
+    asset_id: int,
+    community_id: int = Depends(get_current_community),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssetOut:
+    """将素材关联到内容。"""
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if not content:
+        raise HTTPException(404, "Content not found")
+    if not check_content_edit_permission(content, current_user, db):
+        raise HTTPException(403, "没有权限编辑此内容")
+
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.community_id == community_id).first()
+    if not asset:
+        raise HTTPException(404, "素材不存在")
+
+    if asset not in content.assets:
+        content.assets.append(asset)
+        db.commit()
+    return _build_asset_out_simple(asset)
+
+
+@router.delete("/{content_id}/assets/{asset_id}", status_code=204)
+async def unlink_asset_from_content(
+    content_id: int,
+    asset_id: int,
+    community_id: int = Depends(get_current_community),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """解除素材与内容的关联。"""
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if not content:
+        raise HTTPException(404, "Content not found")
+    if not check_content_edit_permission(content, current_user, db):
+        raise HTTPException(403, "没有权限编辑此内容")
+
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if asset and asset in content.assets:
+        content.assets.remove(asset)
+        db.commit()

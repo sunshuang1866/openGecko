@@ -34,9 +34,14 @@
               <button class="mode-btn" :class="{ active: editorMode === 'html' }" @click="editorMode = 'html'">HTML（135 等富文本）</button>
             </div>
             <span v-if="editorMode === 'html'" class="editor-hint">粘贴 135/飞书 等的 HTML 源码，发布微信时直接使用</span>
+            <button v-if="editorMode === 'markdown'" class="insert-asset-btn" @click="openAssetPickerForMarkdown">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              插入素材库图片
+            </button>
           </div>
           <MdEditorV3
             v-if="editorMode === 'markdown'"
+            ref="mdEditorRef"
             v-model="form.content_markdown"
             :preview="true"
             language="zh-CN"
@@ -99,9 +104,10 @@
               <span class="cover-hint">建议比例 2.35:1</span>
             </div>
           </div>
-          <div v-if="coverImageUrl" class="cover-actions-row">
-            <button class="cover-action-btn" @click="triggerCoverUpload">更换</button>
-            <button class="cover-action-btn danger" @click="removeCover">移除</button>
+          <div class="cover-actions-row">
+            <button v-if="coverImageUrl" class="cover-action-btn" @click="triggerCoverUpload">更换</button>
+            <button v-if="coverImageUrl" class="cover-action-btn danger" @click="removeCover">移除</button>
+            <button class="cover-action-btn library-btn" @click="openAssetPickerForCover">从素材库选取</button>
           </div>
           <input ref="coverInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none" @change="handleCoverSelect" />
         </div>
@@ -195,6 +201,13 @@
         </div>
       </div>
     </div>
+
+    <!-- 素材库选取对话框 -->
+    <AssetPickerDialog
+      v-model="assetPickerVisible"
+      :initial-type="assetPickerInitialType"
+      @select="handleAssetPicked"
+    />
   </div>
 </template>
 
@@ -219,6 +232,8 @@ import {
 import { getCommunityUsers, type CommunityUser } from '../api/community'
 import { useAuthStore } from '../stores/auth'
 import { useCommunityStore } from '../stores/community'
+import AssetPickerDialog from '../components/AssetPickerDialog.vue'
+import type { Asset } from '../api/asset'
 
 const route = useRoute()
 const router = useRouter()
@@ -227,6 +242,12 @@ const coverInput = ref<HTMLInputElement | null>(null)
 const coverImageUrl = ref<string | null>(null)
 const authStore = useAuthStore()
 const communityStore = useCommunityStore()
+
+// Asset picker
+const assetPickerVisible = ref(false)
+const assetPickerInitialType = ref('')
+const assetPickerMode = ref<'cover' | 'markdown'>('cover')
+const mdEditorRef = ref<InstanceType<typeof MdEditorV3> | null>(null)
 
 const contentId = computed(() => route.params.id ? Number(route.params.id) : null)
 const isNew = computed(() => !contentId.value)
@@ -353,6 +374,50 @@ async function removeCover() {
     ElMessage.success('封面图已移除')
   } catch (e: any) {
     ElMessage.error('移除封面图失败')
+  }
+}
+
+function openAssetPickerForCover() {
+  if (!contentId.value) {
+    ElMessage.warning('请先保存内容后再使用素材库')
+    return
+  }
+  assetPickerMode.value = 'cover'
+  assetPickerInitialType.value = 'image'
+  assetPickerVisible.value = true
+}
+
+function openAssetPickerForMarkdown() {
+  assetPickerMode.value = 'markdown'
+  assetPickerInitialType.value = 'image'
+  assetPickerVisible.value = true
+}
+
+async function handleAssetPicked(asset: Asset) {
+  if (assetPickerMode.value === 'cover') {
+    if (!contentId.value) return
+    try {
+      await updateContent(contentId.value, { cover_image: asset.file_url } as any)
+      coverImageUrl.value = asset.file_url
+      ElMessage.success('封面图已更新')
+    } catch (e: any) {
+      ElMessage.error('设置封面图失败')
+    }
+  } else {
+    // 插入 Markdown 图片语法
+    const imgMd = `![${asset.name}](${asset.file_url})`
+    if (mdEditorRef.value) {
+      ;(mdEditorRef.value as any).insert((selectedText: string) => ({
+        targetValue: selectedText ? `![${selectedText}](${asset.file_url})` : imgMd,
+        select: false,
+        deviationStart: 0,
+        deviationEnd: 0,
+      }))
+    } else {
+      // fallback: append to content
+      form.value.content_markdown += `\n${imgMd}\n`
+    }
+    ElMessage.success('图片已插入')
   }
 }
 
@@ -730,8 +795,9 @@ function formatScheduleDisplay(iso: string): string {
 
 .cover-actions-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .cover-action-btn {
@@ -749,6 +815,27 @@ function formatScheduleDisplay(iso: string): string {
 .cover-action-btn:hover { border-color: #cbd5e1; background: #f8fafc; color: var(--text-primary); }
 .cover-action-btn.danger { color: #ef4444; }
 .cover-action-btn.danger:hover { border-color: #fca5a5; background: #fef2f2; }
+.cover-action-btn.library-btn { color: #0095ff; border-color: #bfdbfe; background: #eff6ff; }
+.cover-action-btn.library-btn:hover { border-color: #0095ff; background: #dbeafe; }
+
+/* ── 素材库插入按钮（编辑器头部） ── */
+.insert-asset-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #0095ff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.insert-asset-btn:hover { border-color: #0095ff; background: #dbeafe; }
 
 .community-tags { padding: 2px 0 6px; }
 

@@ -71,17 +71,17 @@
               <div
                 class="bar-segment planning"
                 :style="{ width: barWidth(user, 'planning') }"
-                :title="`计划中: ${contentPlanning(user) + meetingPlanning(user) + (user.event_task_stats?.planning ?? 0) + (user.checklist_item_stats?.planning ?? 0)}`"
+                :title="`计划中: ${contentPlanning(user) + meetingPlanning(user) + (user.event_task_stats?.planning ?? 0) + (user.checklist_item_stats?.planning ?? 0) + (user.design_task_stats?.planning ?? 0)}`"
               />
               <div
                 class="bar-segment in-progress"
                 :style="{ width: barWidth(user, 'in_progress') }"
-                :title="`进行中: ${contentInProgress(user) + meetingInProgress(user) + (user.event_task_stats?.in_progress ?? 0) + (user.checklist_item_stats?.in_progress ?? 0)}`"
+                :title="`进行中: ${contentInProgress(user) + meetingInProgress(user) + (user.event_task_stats?.in_progress ?? 0) + (user.checklist_item_stats?.in_progress ?? 0) + (user.design_task_stats?.in_progress ?? 0)}`"
               />
               <div
                 class="bar-segment completed"
                 :style="{ width: barWidth(user, 'completed') }"
-                :title="`已完成: ${contentCompleted(user) + meetingCompleted(user) + (user.event_task_stats?.completed ?? 0) + (user.checklist_item_stats?.completed ?? 0)}`"
+                :title="`已完成: ${contentCompleted(user) + meetingCompleted(user) + (user.event_task_stats?.completed ?? 0) + (user.checklist_item_stats?.completed ?? 0) + (user.design_task_stats?.completed ?? 0)}`"
               />
             </div>
           </div>
@@ -102,6 +102,12 @@
               <span class="count-badge event-badge">
                 <el-icon :size="12"><Flag /></el-icon>
                 {{ eventTaskTotal(user) + checklistTotal(user) }}
+              </span>
+            </el-tooltip>
+            <el-tooltip v-if="designTaskTotal(user) > 0" content="设计任务" placement="top">
+              <span class="count-badge design-badge">
+                <el-icon :size="12"><EditPen /></el-icon>
+                {{ designTaskTotal(user) }}
               </span>
             </el-tooltip>
             <el-tooltip v-if="overdueTotal(user) > 0" content="逾期任务" placement="top">
@@ -260,6 +266,31 @@
                 <span class="stat-value">{{ user.care_contact_stats?.completed ?? 0 }}</span>
               </div>
             </div>
+            <div v-if="designTaskTotal(user) > 0" class="stat-group">
+              <div class="stat-group-title">
+                <el-icon :size="14"><EditPen /></el-icon> 设计任务
+              </div>
+              <div class="stat-row">
+                <span class="stat-dot planning" />
+                <span class="stat-label">计划中</span>
+                <span class="stat-value">{{ user.design_task_stats?.planning ?? 0 }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-dot in-progress" />
+                <span class="stat-label">进行中</span>
+                <span class="stat-value">{{ user.design_task_stats?.in_progress ?? 0 }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-dot completed" />
+                <span class="stat-label">已完成</span>
+                <span class="stat-value">{{ user.design_task_stats?.completed ?? 0 }}</span>
+              </div>
+              <div v-if="(user.design_task_stats?.overdue ?? 0) > 0" class="stat-row overdue-row">
+                <span class="stat-dot overdue" />
+                <span class="stat-label">逾期未完成</span>
+                <span class="stat-value overdue-value">{{ user.design_task_stats?.overdue ?? 0 }}</span>
+              </div>
+            </div>
             <div class="stat-group">
               <div class="stat-group-title">内容类型分布</div>
               <div class="type-tags">
@@ -293,7 +324,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Calendar, Warning, Clock, CircleCheck, List, User, Flag } from '@element-plus/icons-vue'
+import { Document, Calendar, Warning, Clock, CircleCheck, EditPen, Flag, List, User } from '@element-plus/icons-vue'
 import apiClient from '../api'
 
 interface WorkStatusStats {
@@ -318,6 +349,7 @@ interface UserWorkloadItem {
   event_task_stats: WorkStatusStats
   checklist_item_stats: WorkStatusStats
   care_contact_stats?: WorkStatusStats
+  design_task_stats?: WorkStatusStats
   content_by_type: ContentByTypeStats
   total: number
 }
@@ -332,8 +364,8 @@ const sortedUsers = computed(() =>
       return overdueTotal(b) - overdueTotal(a)
     }
     if (sortKey.value === 'in_progress') {
-      return (b.content_stats.in_progress + b.meeting_stats.in_progress + (b.event_task_stats?.in_progress ?? 0) + (b.checklist_item_stats?.in_progress ?? 0))
-           - (a.content_stats.in_progress + a.meeting_stats.in_progress + (a.event_task_stats?.in_progress ?? 0) + (a.checklist_item_stats?.in_progress ?? 0))
+      return (b.content_stats.in_progress + b.meeting_stats.in_progress + (b.event_task_stats?.in_progress ?? 0) + (b.checklist_item_stats?.in_progress ?? 0) + (b.design_task_stats?.in_progress ?? 0))
+           - (a.content_stats.in_progress + a.meeting_stats.in_progress + (a.event_task_stats?.in_progress ?? 0) + (a.checklist_item_stats?.in_progress ?? 0) + (a.design_task_stats?.in_progress ?? 0))
     }
     return b.total - a.total
   })
@@ -341,13 +373,13 @@ const sortedUsers = computed(() =>
 
 const totalItems = computed(() => users.value.reduce((sum, u) => sum + u.total, 0))
 const totalInProgress = computed(() =>
-  users.value.reduce((sum, u) => sum + u.content_stats.in_progress + u.meeting_stats.in_progress + (u.event_task_stats?.in_progress ?? 0) + (u.checklist_item_stats?.in_progress ?? 0), 0)
+  users.value.reduce((sum, u) => sum + u.content_stats.in_progress + u.meeting_stats.in_progress + (u.event_task_stats?.in_progress ?? 0) + (u.checklist_item_stats?.in_progress ?? 0) + (u.design_task_stats?.in_progress ?? 0), 0)
 )
 const totalCompleted = computed(() =>
-  users.value.reduce((sum, u) => sum + u.content_stats.completed + u.meeting_stats.completed + (u.event_task_stats?.completed ?? 0) + (u.checklist_item_stats?.completed ?? 0), 0)
+  users.value.reduce((sum, u) => sum + u.content_stats.completed + u.meeting_stats.completed + (u.event_task_stats?.completed ?? 0) + (u.checklist_item_stats?.completed ?? 0) + (u.design_task_stats?.completed ?? 0), 0)
 )
 const totalOverdue = computed(() =>
-  users.value.reduce((sum, u) => sum + (u.content_stats.overdue || 0) + (u.meeting_stats.overdue || 0) + (u.event_task_stats?.overdue ?? 0) + (u.checklist_item_stats?.overdue ?? 0), 0)
+  users.value.reduce((sum, u) => sum + (u.content_stats.overdue || 0) + (u.meeting_stats.overdue || 0) + (u.event_task_stats?.overdue ?? 0) + (u.checklist_item_stats?.overdue ?? 0) + (u.design_task_stats?.overdue ?? 0), 0)
 )
 
 const maxTotal = computed(() => Math.max(...users.value.map(u => u.total), 1))
@@ -364,16 +396,17 @@ const meetingTotal = (u: UserWorkloadItem) => u.meeting_stats.planning + u.meeti
 const eventTaskTotal = (u: UserWorkloadItem) => (u.event_task_stats?.planning ?? 0) + (u.event_task_stats?.in_progress ?? 0) + (u.event_task_stats?.completed ?? 0)
 const checklistTotal = (u: UserWorkloadItem) => (u.checklist_item_stats?.planning ?? 0) + (u.checklist_item_stats?.in_progress ?? 0) + (u.checklist_item_stats?.completed ?? 0)
 const careContactTotal = (u: UserWorkloadItem) => (u.care_contact_stats?.planning ?? 0) + (u.care_contact_stats?.in_progress ?? 0) + (u.care_contact_stats?.completed ?? 0)
-const overdueTotal = (u: UserWorkloadItem) => (u.content_stats.overdue || 0) + (u.meeting_stats.overdue || 0) + (u.event_task_stats?.overdue ?? 0) + (u.checklist_item_stats?.overdue ?? 0)
+const designTaskTotal = (u: UserWorkloadItem) => (u.design_task_stats?.planning ?? 0) + (u.design_task_stats?.in_progress ?? 0) + (u.design_task_stats?.completed ?? 0)
+const overdueTotal = (u: UserWorkloadItem) => (u.content_stats.overdue || 0) + (u.meeting_stats.overdue || 0) + (u.event_task_stats?.overdue ?? 0) + (u.checklist_item_stats?.overdue ?? 0) + (u.design_task_stats?.overdue ?? 0)
 
 function barWidth(user: UserWorkloadItem, status: string) {
   const total = user.total
   if (total === 0) return '0%'
   let count = 0
   if (status === 'overdue') count = overdueTotal(user)
-  else if (status === 'planning') count = contentPlanning(user) + meetingPlanning(user) + (user.event_task_stats?.planning ?? 0) + (user.checklist_item_stats?.planning ?? 0)
-  else if (status === 'in_progress') count = contentInProgress(user) + meetingInProgress(user) + (user.event_task_stats?.in_progress ?? 0) + (user.checklist_item_stats?.in_progress ?? 0)
-  else if (status === 'completed') count = contentCompleted(user) + meetingCompleted(user) + (user.event_task_stats?.completed ?? 0) + (user.checklist_item_stats?.completed ?? 0)
+  else if (status === 'planning') count = contentPlanning(user) + meetingPlanning(user) + (user.event_task_stats?.planning ?? 0) + (user.checklist_item_stats?.planning ?? 0) + (user.design_task_stats?.planning ?? 0)
+  else if (status === 'in_progress') count = contentInProgress(user) + meetingInProgress(user) + (user.event_task_stats?.in_progress ?? 0) + (user.checklist_item_stats?.in_progress ?? 0) + (user.design_task_stats?.in_progress ?? 0)
+  else if (status === 'completed') count = contentCompleted(user) + meetingCompleted(user) + (user.event_task_stats?.completed ?? 0) + (user.checklist_item_stats?.completed ?? 0) + (user.design_task_stats?.completed ?? 0)
   // Scale relative to maxTotal so the top user fills the bar
   return `${(count / maxTotal.value) * 100}%`
 }
@@ -634,6 +667,7 @@ onMounted(loadData)
 .content-badge  { background: #eff6ff; color: #1d4ed8; }
 .meeting-badge  { background: #f0fdf4; color: #15803d; }
 .event-badge    { background: #fffbeb; color: #b45309; }
+.design-badge   { background: #fdf4ff; color: #7e22ce; }
 .overdue-badge  { background: #fef2f2; color: #dc2626; }
 .total-count {
   font-size: 18px;
